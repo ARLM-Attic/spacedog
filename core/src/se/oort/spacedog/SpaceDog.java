@@ -130,13 +130,7 @@ public class SpaceDog extends ApplicationAdapter {
 
     Model model;
 
-
-    btCollisionShape groundShape;
-    btCollisionShape ballShape;
-
-    btCollisionObject groundObject;
-    btCollisionObject ballObject;
-
+    
     btCollisionConfiguration collisionConfig;
     btDispatcher dispatcher;
 

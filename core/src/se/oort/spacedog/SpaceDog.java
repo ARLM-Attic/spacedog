@@ -2,6 +2,7 @@ package se.oort.spacedog;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
@@ -76,7 +77,14 @@ public class SpaceDog extends ApplicationAdapter {
         public final btRigidBody body;
         public final MyMotionState motionState;
 
-        public GameObject (Model model, String node, btRigidBody.btRigidBodyConstructionInfo constructionInfo) {
+        public GameObject(Model model, btRigidBody.btRigidBodyConstructionInfo constructionInfo) {
+            super(model);
+            motionState = new MyMotionState();
+            motionState.transform = transform;
+            body = new btRigidBody(constructionInfo);
+            body.setMotionState(motionState);
+        }
+        public GameObject(Model model, String node, btRigidBody.btRigidBodyConstructionInfo constructionInfo) {
             super(model, node);
             motionState = new MyMotionState();
             motionState.transform = transform;
@@ -97,6 +105,16 @@ public class SpaceDog extends ApplicationAdapter {
             public final btRigidBody.btRigidBodyConstructionInfo constructionInfo;
             private static Vector3 localInertia = new Vector3();
 
+            public Constructor (Model model, btCollisionShape shape, float mass) {
+                this.model = model;
+                this.node = null;
+                this.shape = shape;
+                if (mass > 0f)
+                    shape.calculateLocalInertia(mass, localInertia);
+                else
+                    localInertia.set(0, 0, 0);
+                this.constructionInfo = new btRigidBody.btRigidBodyConstructionInfo(mass, null, shape, localInertia);
+            }
             public Constructor (Model model, String node, btCollisionShape shape, float mass) {
                 this.model = model;
                 this.node = node;
@@ -109,7 +127,13 @@ public class SpaceDog extends ApplicationAdapter {
             }
 
             public GameObject construct () {
-                return new GameObject(model, node, constructionInfo);
+                if (this.node == null) {
+                    System.out.println("Instantiating ship");
+                    return new GameObject(model, constructionInfo);
+                } else {
+                    System.out.println("Instantiating " + this.node);
+                    return new GameObject(model, node, constructionInfo);
+                }
             }
 
             @Override
@@ -130,7 +154,7 @@ public class SpaceDog extends ApplicationAdapter {
 
     Model model;
 
-    
+
     btCollisionConfiguration collisionConfig;
     btDispatcher dispatcher;
 
@@ -141,6 +165,11 @@ public class SpaceDog extends ApplicationAdapter {
     btBroadphaseInterface broadphase;
     btDynamicsWorld dynamicsWorld;
     btConstraintSolver constraintSolver;
+
+    AssetManager assets;
+    boolean loading;
+
+    String shipFile = System.getProperty("SHIP");
 
     private void createEnvironment() {
         Bullet.init();
@@ -167,6 +196,7 @@ public class SpaceDog extends ApplicationAdapter {
         dynamicsWorld.setGravity(new Vector3(0, -10f, 0));
         contactListener = new MyContactListener();
 
+        assets = new AssetManager();
     }
 
     private void createModels() {
@@ -206,6 +236,11 @@ public class SpaceDog extends ApplicationAdapter {
         instances.add(object);
         dynamicsWorld.addRigidBody(object.body, GROUND_FLAG, ALL_FLAG);
 
+        if (shipFile != null) {
+            System.out.println("Loading " + shipFile);
+            assets.load(shipFile, Model.class);
+        }
+        loading = true;
     }
 
 	@Override
@@ -214,8 +249,20 @@ public class SpaceDog extends ApplicationAdapter {
         createModels();
     }
 
+    private void doneLoading() {
+        if (shipFile != null) {
+            System.out.println("Preparing to use " + shipFile);
+            Model ship = assets.get(shipFile, Model.class);
+            constructors.put("ship", new GameObject.Constructor(ship, new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f)), 1f));
+        }
+        loading = false;
+    }
+
     @Override
     public void render () {
+        if (loading && assets.update())
+            doneLoading();
+
         final float delta = Math.min(1f / 30f, Gdx.graphics.getDeltaTime());
 
         dynamicsWorld.stepSimulation(delta, 5, 1f / 60f);
@@ -227,7 +274,7 @@ public class SpaceDog extends ApplicationAdapter {
 
         camController.update();
 
-		Gdx.gl.glClearColor(0.3f, 0.3f, 0.3f, 1.f);
+        Gdx.gl.glClearColor(0.3f, 0.3f, 0.3f, 1.f);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
 		modelBatch.begin(cam);

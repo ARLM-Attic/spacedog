@@ -16,6 +16,7 @@ import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
@@ -46,10 +47,6 @@ import com.badlogic.gdx.utils.Disposable;
 
 public class SpaceDog extends ApplicationAdapter {
 
-    final static short GROUND_FLAG = 1<<8;
-    final static short OBJECT_FLAG = 1<<9;
-    final static short ALL_FLAG = -1;
-
     static class MyMotionState extends btMotionState {
         Matrix4 transform;
         @Override
@@ -59,17 +56,6 @@ public class SpaceDog extends ApplicationAdapter {
         @Override
         public void setWorldTransform (Matrix4 worldTrans) {
             transform.set(worldTrans);
-        }
-    }
-
-    class MyContactListener extends ContactListener {
-        @Override
-        public boolean onContactAdded (int userValue0, int partId0, int index0, int userValue1, int partId1, int index1) {
-            if (userValue0 != 0)
-                ((ColorAttribute)instances.get(userValue0).materials.get(0).get(ColorAttribute.Diffuse)).color.set(Color.WHITE);
-            if (userValue1 != 0)
-                ((ColorAttribute)instances.get(userValue1).materials.get(0).get(ColorAttribute.Diffuse)).color.set(Color.WHITE);
-            return true;
         }
     }
 
@@ -128,10 +114,8 @@ public class SpaceDog extends ApplicationAdapter {
 
             public GameObject construct () {
                 if (this.node == null) {
-                    System.out.println("Instantiating ship");
                     return new GameObject(model, constructionInfo);
                 } else {
-                    System.out.println("Instantiating " + this.node);
                     return new GameObject(model, node, constructionInfo);
                 }
             }
@@ -144,47 +128,44 @@ public class SpaceDog extends ApplicationAdapter {
         }
     }
 
+    // Rendering
+
+    Environment environment;
 	PerspectiveCamera cam;
 	CameraInputController camController;
 	ModelBatch modelBatch;
     Array<GameObject> instances;
     ArrayMap<String, GameObject.Constructor> constructors;
-	Environment environment;
+    AssetManager assets;
+    boolean loading;
+    String shipFile = "assets/ships/ship_1/ship_1.g3dj";
 
-
-    Model model;
-
+    // Physics
 
     btCollisionConfiguration collisionConfig;
     btDispatcher dispatcher;
-
-    float spawnTimer;
-
-    MyContactListener contactListener;
-
     btBroadphaseInterface broadphase;
     btDynamicsWorld dynamicsWorld;
     btConstraintSolver constraintSolver;
 
-    AssetManager assets;
-    boolean loading;
-
-    String shipFile = System.getProperty("SHIP");
 
     private void createEnvironment() {
         Bullet.init();
 
-        modelBatch = new ModelBatch();
-
         environment = new Environment();
         environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.4f, 0.4f, 0.4f, 1f));
         environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f, -0.8f, -0.2f));
+        modelBatch = new ModelBatch();
+        assets = new AssetManager();
+        instances = new Array<GameObject>();
+        constructors = new ArrayMap<String, GameObject.Constructor>(String.class, GameObject.Constructor.class);
 
         cam = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        cam.position.set(3f, 7f, 10f);
-        cam.lookAt(0, 4f, 0);
+        cam.position.set(200f, 100f, 0f);
+        cam.near = 10;
+        cam.far = 4000;
+        cam.lookAt(0, 0, 0);
         cam.update();
-
         camController = new CameraInputController(cam);
         Gdx.input.setInputProcessor(camController);
 
@@ -193,53 +174,11 @@ public class SpaceDog extends ApplicationAdapter {
         broadphase = new btDbvtBroadphase();
         constraintSolver = new btSequentialImpulseConstraintSolver();
         dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, broadphase, constraintSolver, collisionConfig);
-        dynamicsWorld.setGravity(new Vector3(0, -10f, 0));
-        contactListener = new MyContactListener();
-
-        assets = new AssetManager();
+        dynamicsWorld.setGravity(new Vector3(0, 0, 0));
     }
 
     private void createModels() {
-
-        ModelBuilder mb = new ModelBuilder();
-        mb.begin();
-        mb.node().id = "ground";
-        mb.part("ground", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.RED)))
-                .box(5f, 1f, 5f);
-        mb.node().id = "sphere";
-        mb.part("sphere", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.GREEN)))
-                .sphere(1f, 1f, 1f, 10, 10);
-        mb.node().id = "box";
-        mb.part("box", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.BLUE)))
-                .box(1f, 1f, 1f);
-        mb.node().id = "cone";
-        mb.part("cone", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.YELLOW)))
-                .cone(1f, 2f, 1f, 10);
-        mb.node().id = "capsule";
-        mb.part("capsule", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.CYAN)))
-                .capsule(0.5f, 2f, 10);
-        mb.node().id = "cylinder";
-        mb.part("cylinder", GL20.GL_TRIANGLES, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.MAGENTA)))
-                .cylinder(1f, 2f, 1f, 10);
-        model = mb.end();
-
-        constructors = new ArrayMap<String, GameObject.Constructor>(String.class, GameObject.Constructor.class);
-        constructors.put("ground", new GameObject.Constructor(model, "ground", new btBoxShape(new Vector3(2.5f, 0.5f, 2.5f)), 0f));
-        constructors.put("sphere", new GameObject.Constructor(model, "sphere", new btSphereShape(0.5f), 1f));
-        constructors.put("box", new GameObject.Constructor(model, "box", new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f)), 1f));
-        constructors.put("cone", new GameObject.Constructor(model, "cone", new btConeShape(0.5f, 2f), 1f));
-        constructors.put("capsule", new GameObject.Constructor(model, "capsule", new btCapsuleShape(.5f, 1f), 1f));
-        constructors.put("cylinder", new GameObject.Constructor(model, "cylinder", new btCylinderShape(new Vector3(.5f, 1f, .5f)), 1f));
-
-        instances = new Array<GameObject>();
-        GameObject object = constructors.get("ground").construct();
-        instances.add(object);
-        dynamicsWorld.addRigidBody(object.body, GROUND_FLAG, ALL_FLAG);
-
-        if (shipFile != null) {
-            System.out.println("Loading " + shipFile);
-            assets.load(shipFile, Model.class);
-        }
+        assets.load(shipFile, Model.class);
         loading = true;
     }
 
@@ -250,12 +189,18 @@ public class SpaceDog extends ApplicationAdapter {
     }
 
     private void doneLoading() {
-        if (shipFile != null) {
-            System.out.println("Preparing to use " + shipFile);
-            Model ship = assets.get(shipFile, Model.class);
-            constructors.put("ship", new GameObject.Constructor(ship, new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f)), 1f));
-        }
+        Model ship = assets.get(shipFile, Model.class);
+        constructors.put("ship", new GameObject.Constructor(ship, new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f)), 1f));
         loading = false;
+
+        GameObject obj = constructors.get("ship").construct();
+        obj.transform.setFromEulerAngles(MathUtils.random(360f), MathUtils.random(360f), MathUtils.random(360f));
+        obj.transform.trn(MathUtils.random(-2.5f, 2.5f), 90f, MathUtils.random(-2.5f, 2.5f));
+        obj.body.proceedToTransform(obj.transform);
+        obj.body.setUserValue(instances.size);
+        obj.body.setCollisionFlags(obj.body.getCollisionFlags());
+        instances.add(obj);
+        dynamicsWorld.addRigidBody(obj.body);
     }
 
     @Override
@@ -267,11 +212,6 @@ public class SpaceDog extends ApplicationAdapter {
 
         dynamicsWorld.stepSimulation(delta, 5, 1f / 60f);
 
-        if ((spawnTimer -= delta) < 0) {
-            spawn();
-            spawnTimer = 1.5f;
-        }
-
         camController.update();
 
         Gdx.gl.glClearColor(0.3f, 0.3f, 0.3f, 1.f);
@@ -281,17 +221,6 @@ public class SpaceDog extends ApplicationAdapter {
 		modelBatch.render(instances, environment);
         modelBatch.end();
 	}
-
-    public void spawn () {
-        GameObject obj = constructors.values[1 + MathUtils.random(constructors.size - 2)].construct();
-        obj.transform.setFromEulerAngles(MathUtils.random(360f), MathUtils.random(360f), MathUtils.random(360f));
-        obj.transform.trn(MathUtils.random(-2.5f, 2.5f), 9f, MathUtils.random(-2.5f, 2.5f));
-        obj.body.proceedToTransform(obj.transform);
-        obj.body.setUserValue(instances.size);
-        obj.body.setCollisionFlags(obj.body.getCollisionFlags() | btCollisionObject.CollisionFlags.CF_CUSTOM_MATERIAL_CALLBACK);
-        instances.add(obj);
-        dynamicsWorld.addRigidBody(obj.body, OBJECT_FLAG, GROUND_FLAG);
-    }
 
 	@Override
 	public void dispose () {
@@ -307,8 +236,6 @@ public class SpaceDog extends ApplicationAdapter {
         collisionConfig.dispose();
 
         modelBatch.dispose();
-        model.dispose();
-        contactListener.dispose();
         dynamicsWorld.dispose();
         constraintSolver.dispose();
         broadphase.dispose();

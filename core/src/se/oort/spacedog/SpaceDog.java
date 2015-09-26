@@ -3,38 +3,27 @@ package se.oort.spacedog;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
-import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.Environment;
-import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
-import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.bullet.Bullet;
-import com.badlogic.gdx.physics.bullet.collision.ContactListener;
 import com.badlogic.gdx.physics.bullet.collision.btBoxShape;
 import com.badlogic.gdx.physics.bullet.collision.btBroadphaseInterface;
-import com.badlogic.gdx.physics.bullet.collision.btCapsuleShape;
 import com.badlogic.gdx.physics.bullet.collision.btCollisionConfiguration;
 import com.badlogic.gdx.physics.bullet.collision.btCollisionDispatcher;
-import com.badlogic.gdx.physics.bullet.collision.btCollisionObject;
 import com.badlogic.gdx.physics.bullet.collision.btCollisionShape;
-import com.badlogic.gdx.physics.bullet.collision.btConeShape;
-import com.badlogic.gdx.physics.bullet.collision.btCylinderShape;
 import com.badlogic.gdx.physics.bullet.collision.btDbvtBroadphase;
 import com.badlogic.gdx.physics.bullet.collision.btDefaultCollisionConfiguration;
 import com.badlogic.gdx.physics.bullet.collision.btDispatcher;
-import com.badlogic.gdx.physics.bullet.collision.btSphereShape;
 import com.badlogic.gdx.physics.bullet.dynamics.btConstraintSolver;
 import com.badlogic.gdx.physics.bullet.dynamics.btDiscreteDynamicsWorld;
 import com.badlogic.gdx.physics.bullet.dynamics.btDynamicsWorld;
@@ -130,6 +119,9 @@ public class SpaceDog extends ApplicationAdapter {
 
     // Rendering
 
+    static String shipFile = "assets/ships/ship_1/ship_1.g3dj";
+    static String skyboxFilePrefix = "assets/skybox/space";
+
     Environment environment;
 	PerspectiveCamera cam;
 	CameraInputController camController;
@@ -138,7 +130,6 @@ public class SpaceDog extends ApplicationAdapter {
     ArrayMap<String, GameObject.Constructor> constructors;
     AssetManager assets;
     boolean loading;
-    String shipFile = "assets/ships/ship_1/ship_1.g3dj";
 
     // Physics
 
@@ -163,7 +154,7 @@ public class SpaceDog extends ApplicationAdapter {
         cam = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         cam.position.set(200f, 100f, 0f);
         cam.near = 10;
-        cam.far = 4000;
+        cam.far = 4000000;
         cam.lookAt(0, 0, 0);
         cam.update();
         camController = new CameraInputController(cam);
@@ -179,6 +170,7 @@ public class SpaceDog extends ApplicationAdapter {
 
     private void createModels() {
         assets.load(shipFile, Model.class);
+
         loading = true;
     }
 
@@ -188,10 +180,9 @@ public class SpaceDog extends ApplicationAdapter {
         createModels();
     }
 
-    private void doneLoading() {
+    private void addShip() {
         Model ship = assets.get(shipFile, Model.class);
         constructors.put("ship", new GameObject.Constructor(ship, new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f)), 1f));
-        loading = false;
 
         GameObject obj = constructors.get("ship").construct();
         obj.transform.setFromEulerAngles(MathUtils.random(360f), MathUtils.random(360f), MathUtils.random(360f));
@@ -201,6 +192,12 @@ public class SpaceDog extends ApplicationAdapter {
         obj.body.setCollisionFlags(obj.body.getCollisionFlags());
         instances.add(obj);
         dynamicsWorld.addRigidBody(obj.body);
+    }
+
+    private void doneLoading() {
+        loading = false;
+
+        addShip();
     }
 
     @Override
